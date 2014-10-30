@@ -23,3 +23,5 @@ $(LIB_DIR)/btree.so: $(OBJ_DIR)/btree.o $(OBJ_DIR)/block.o $(OBJ_DIR)/operations
 	$(CC) $(CFLAGS) $(filter %.o, $^) -shared -o $@
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -fPIC -c  -o   $(call src_to_obj, $<) $< 
+clean:
+	rm $(OBJ_DIR)/*.o

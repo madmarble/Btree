@@ -1,5 +1,4 @@
 #include "operations.h"
-#include "block.h"
 #include "btree.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,13 +72,13 @@ void b_tree_insert_nonfull(struct DB *x, const struct DBT *key, const struct DBT
 int b_tree_insert(struct DB *x, const struct DBT *key, const struct DBT *value)
 {
 	printf("Insert starting\n");
-	if (x->n == 2 * x->conf->t - 1) {
-		struct DB *z = dbcreate(x->conf);
+	if (x->node->n == 2 * x->t - 1) {
+		struct DB *z = dbcreate(x->disk->file, x->disk->conf);
 		if (z == NULL) {
 			printf("Cant create block\n");
 			return -1;
 		}
-		x->conf->root_offset = z->own_tag;
+		x->disk->root_offset = z->own_tag;
 		z->neighbours = (int *)malloc(sizeof(int) * (z->n + 1));
 		z->neighbours[0] = x->own_tag;
 		z->leaf = 0;
@@ -96,23 +95,27 @@ int b_tree_insert(struct DB *x, const struct DBT *key, const struct DBT *value)
 int b_tree_search(struct DB *x, const struct DBT *key, struct DBT *data)
 {
 	int i = 0;
-	while (i < x->n && memcmp(key->data, x->keys[i].data, key->size) > 0) {
+	while (i < x->node->n && memcmp(key->data, x->node->keys[i].data, key->size) > 0) {
 		i++;
 	}
-	if (i < x->n && !memcmp(key->data, x->keys[i].data, key->size)){
-		data = x->values[i].data;
+	if (i < x->node->n && !memcmp(key->data, x->node->keys[i].data, key->size)){
+		data = x->node->values[i].data;
 		return 0;
-	} else if (x->leaf) {
+	} else if (x->node->leaf) {
 		data = 0;
 		return 1;
 	} else {
-		struct DB *res = read_block(x->conf, i);
+		struct Node *res = x->disk->read_block(i);
+		struct Disk *disk = read_disk(x->disk->file, x->disk->conf);
+		struct DB *res = (struct DB *)malloc(sizeof(*res));
+		res->node = node;
+		res->disk = disk;
 		return b_tree_search(res, key, data);
 	}
 }
-int b_tree_close(struct DB *x)
+int close_node(struct Node *x)
 {
-	printf("close is starting\n");
+	printf("close for node is starting\n");
 	write_block(x);
 	//int i;
 	//still dont understand why :(
@@ -124,6 +127,61 @@ int b_tree_close(struct DB *x)
 	if (x->n) free(x->keys);
 	if (!x->leaf) free(x->neighbours);
 	free(x);
+	printf("close for node is ending\n");
+	return 0;
+}
+int b_tree_close(struct DB *x)
+{
+	printf("close is starting\n");
+	close_node(x->node);
+	write_disk(x->disk);
+	free(x->disk->exist_or_not);
+	free(x);
 	printf("close is ending\n");
 	return 0;
 }
+/*
+void delete_elem(struct DB *x, int index)
+{
+	memmove(x->keys[index], x->keys[index+1], x->n-index-1);
+	memmove(x->values[index], x->values[index+1], x->n-index-1);
+	return;
+}
+struct DBT * b_tree_search_node(struct DB *x, const struct DBT *key)
+{
+	int i = 0;
+	while (i < x->n && memcmp(key->data, x->keys[i].data, key->size) > 0) {
+		i++;
+	}
+	if (i < x->n && !memcmp(key->data, x->keys[i].data, key->size)){
+		return x;
+	} else if (x->leaf) {
+		return NULL;
+	} else {
+		struct DB *res = read_block(x->conf, i);
+		return b_tree_search(res, key, data);
+	}
+}*/
+/*
+int b_tree_delete(struct DB *x, const struct DBT *key)
+{
+	struct DB *res = b_tree_search_node(x, key);
+	if (res == NULL) return 1;
+	x->db_close(x);
+	int i = 0;
+	while (i < res->n && memcmp(key->data, res->keys[i].data, key->size) > 0) {
+		i++;
+	}
+	if (i < res->n && !memcmp(key->data, res->keys[i].data, key->size) && res->leaf){
+		delete_elem(x, i); 
+		return 0;
+	}
+	if(i < res->n && !memcmp(key->data, res->keys[i].data, key->size) && !res->leaf) {
+		struct DB *t = read_block(x->conf, res->neighbours[i]);
+		if (t->n >= conf->t) {
+			struct DBT *t_key = t->keys[t->n-1];
+		}
+		
+	}
+
+}*/

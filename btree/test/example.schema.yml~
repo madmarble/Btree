@@ -1,0 +1,6 @@
+---
+get: 70
+shuffle: True
+distrib: 'uniform'
+ops: 10000
+...

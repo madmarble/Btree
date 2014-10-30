@@ -6,18 +6,17 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
-#include "block.h"
 #include "operations.h"
 int db_close(struct DB *db) {
 	return db->close(db);
-}/*
+}
 int db_del(struct DB *db, void *key, size_t key_len) {
 	struct DBT keyt = {
 		.data = key,
 		.size = key_len
 	};
 	return db->del(db, &keyt);
-}*/
+}
 int db_get(struct DB *db, void *key, size_t key_len, void **val, size_t *val_len) {
 	struct DBT keyt = {
 		.data = key,
@@ -40,92 +39,106 @@ int db_put(struct DB *db, void *key, size_t key_len, void *val, size_t val_len) 
 	};
 	return db->put(db, &keyt, &valt);
 }
-void write_conf(struct DBC *conf)
+void initialize_fields(struct Disk *res)
 {
-	lseek(conf->fd, 0, SEEK_SET);
-	write(conf->fd, &conf->db_size, sizeof(conf->db_size));
-	write(conf->fd, &conf->chunk_size, sizeof(conf->chunk_size));
-	int i;
-	for (i = 0; i < conf->db_size / conf->chunk_size; i++) {
-		write(conf->fd, &conf->exist_or_not[i], sizeof(char));
-	}
-	write(conf->fd, &conf->root_offset, sizeof(conf->root_offset));
+	res->start_offset = 2 * sizeof(size_t) + sizeof(int);
+	res->start_offset += res->db_size / res->chunk_size + res->db_size % res->chunk_size;
+	res->start_offset = res->start_offset / res->chunk_size + (res->start_offset % res->chunk_size ? 1 : 0);
+	res->count_blocks = res->db_size / res->chunk_size;
 	return;
 }
-void read_conf(struct DBC *conf)
+void write_disk(struct Disk *disk)
 {
-	lseek(conf->fd, 0, SEEK_SET);
-	read(conf->fd, &conf->db_size, sizeof(conf->db_size));
-	read(conf->fd, &conf->chunk_size, sizeof(conf->chunk_size));
+	int fd = open(disk->file, O_RDWR);
+	//write(fd, &disk->db_size, sizeof(disk->db_size));
+	//write(fd, &disk->chunk_size, sizeof(disk->db_size));
 	int i;
-	for (i = 0; i < conf->db_size / conf->chunk_size; i++) {
-		read(conf->fd, &conf->exist_or_not[i], sizeof(char));
+	for (i = 0; i < disk->db_size / disk->chunk_size; i++) {
+		write(fd, &disk->exist_or_not[i], sizeof(char));
 	}
-	read(conf->fd, &conf->root_offset, sizeof(conf->root_offset));
-	conf->t = conf->chunk_size / 2 - 1;
-	conf->start_offset = 2 * sizeof(size_t) + sizeof(int);
-	conf->start_offset += conf->db_size / conf->chunk_size + conf->db_size % conf->chunk_size;
-	conf->start_offset = conf->start_offset / conf->chunk_size + (conf->start_offset % conf->chunk_size ? 1 : 0);
-	conf->count_blocks = conf->db_size / conf->chunk_size;
+	write(fd, &disk->root_offset, sizeof(disk->root_offset));
+	close(fd);
 	return;
 }
-struct DB * dbcreate(struct DBC *conf)
+struct Disk * create_disk(const char *file)
 {
-	printf("Start creating block\n");
-	struct DB *res = (struct DB *)malloc(1 * sizeof(struct DB));
-	res->n = 0;
-	res->leaf = 1;
+	struct Disk *res = (struct Disk *)malloc(sizeof(*res));
+	struct DBC *conf = (struct DBC *)malloc(sizeof(*conf));
+	conf->db_size = 512 * 1024 * 1024;
+	conf->chunk_size = 4 * 1024;
 	res->conf = conf;
+	initialize_fields(res);
+	res->disk->first_empty = res->disk->start_offset;
+	res->disk->root_offset = res->disk->start_offset;
+	res->disk->exist_or_not = (char *)calloc(res->disk->count_blocks, sizeof(char));
+	res->file = file;
+	return res;
+}
+struct Disk * read_disk(const char *file, struct DBC *conf)
+{
+	if (!conf) {
+		return create_disk(file);
+	}
+
+	int fd = open(file, O_RDWR);
+	struct Disk *res = (struct Disk *)malloc(sizeof(*res));
+	//read(fd, &disk->db_size, sizeof(disk->db_size));
+	//read(fd, &disk->chunk_size, sizeof(disk->db_size));
+	res->conf = conf;
+	int i;
+	for (i = 0; i < res->db_size / res->chunk_size; i++) {
+		read(fd, &res->exist_or_not[i], sizeof(char));
+	}
+	read(fd, &res->root_offset, sizeof(res->root_offset));
+
+	initialize_fields(res);
+	res->file = file;
+	close(fd);
+	return res;
+}
+struct DB * dbcreate(const char *file, struct DBC *conf)
+{
+	printf("Start creating DB\n");
+	struct DB *res = (struct DB *)malloc(1 * sizeof(struct DB));
+	res->node = (struct Node *)malloc(1 * sizeof(struct Node));
+	res->node->n = 0;
+	res->node->leaf = 1;
+
+	res->disk = read_disk(file, conf);
+
 	int i, flag = 1;
-	conf->exist_or_not[conf->first_empty] = 1;
-	res->own_tag = conf->first_empty;
-	for (i = 0; i < conf->count_blocks && flag; i++) {
-		if (!conf->exist_or_not[i]) {
+	res->disk->exist_or_not[res->disk->first_empty] = 1;
+	res->node->own_tag = res->disk->first_empty;
+
+	for (i = 0; i < res->disk->count_blocks && flag; i++) {
+		if (!res->disk->exist_or_not[i]) {
 			flag = 0;
-			conf->first_empty = i;
+			res->disk->first_empty = i;
 		}
 	}
 	if (flag) {
 		printf("Error! Empty space ended\n");
 		return NULL;
 	}
+
 	res->close = &b_tree_close;
 	res->put = &b_tree_insert;
 	res->get = &b_tree_search;
-	printf("Creating block ended\n");
+	printf("Creating DB ended\n");
 	return res;
 }
 
 struct DB * dbopen(const char *file, struct DBC *conf)
 {
-	conf->fd = open(file, O_RDWR);
-	if (conf->fd == -1) {
-
-		fprintf(stderr, "Cant open file %s!\n", file);
-		conf->fd = open(file, O_RDWR | O_CREAT);
-
-		if (conf->fd == -1) {
-			fprintf(stderr, "Cant create file %s!\n", file);
-			return NULL;
-		}
-
-		//initialize settings
-		conf->db_size = 512 * 1024 * 1024;
-		conf->chunk_size = 4 * 1024;
-		conf->t = conf->chunk_size / 2 - 1;
-		conf->start_offset = 2 * sizeof(size_t) + sizeof(int);
-		conf->start_offset += conf->db_size / conf->chunk_size + conf->db_size % conf->chunk_size;
-		conf->start_offset = conf->start_offset / conf->chunk_size + (conf->start_offset % conf->chunk_size ? 1 : 0);
-		conf->count_blocks = conf->db_size / conf->chunk_size;
-		conf->first_empty = conf->start_offset;
-		conf->root_offset = conf->start_offset;
-		conf->exist_or_not = (char *)calloc(conf->count_blocks, sizeof(char));
-
-		struct DB *res = dbcreate(conf);
-		//write_conf(struct DBC *conf);
-		return res;
+	int fd = open(file, O_RDWR);
+	if (fd == -1) {
+		return dbcreate(file, conf);
 	} else {
-		read_conf(conf);
-		return read_block(conf, conf->root_offset);
+		struct Disk *disk = read_disk(file, conf);
+		struct Node *node = disk->read_block(root_offset);
+		struct DB * res = (struct DB *)malloc(sizeof(struct DB *) * 1);
+		res->node = node;
+		res->disk = disk;
+		return res;
 	}
 }
