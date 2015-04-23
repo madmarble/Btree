@@ -1,0 +1,16 @@
+Depends on:
+* libyaml-cpp version 0.5
+* libboost-dev 1.56.0
+* g++ with support of c++11
+* Tested on MacOS X or Linux
+
+Ubuntu:
+* sudo aptitude install libyaml-cpp-dev
+
+Mac OS X:
+* brew install yaml-cpp boost
+
+
+How to use?
+
+* ./test_speed <workload_file> <so_file>
