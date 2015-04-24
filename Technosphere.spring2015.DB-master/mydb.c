@@ -33,6 +33,39 @@ void print_node(struct Node *node)
 	return;
 }
 
+void print_status(struct DB *db, struct Node *node)
+{
+	printf("In node %d exist %d keys and values\n", node->num_vertix, node->n);
+	if (node->leaf)
+		printf("This node is also a leaf\n");
+	else
+		printf("This node is not a leaf\n");
+	int i;
+	for (i = 0; i < node->n; i++) {
+		printf("Size of key is %d and value is %s\n", node->keys[i].size, 
+			(char *)node->keys[i].data);
+		printf("Size of value is %d and value is %s\n", node->values[i].size, 
+			(char *)node->values[i].data);
+	}
+
+	if (!node->leaf) {
+		for (i = 0; i < node->n+1; i++) {
+			printf("Child %d is %d\n", i, node->children[i]);
+		}
+	}
+	printf("\n");
+	fflush(stdout);
+
+	if (!node->leaf) {
+		for (i = 0; i < node->n+1; i++) {
+			struct Node *new_node = db->open_node(db, node->children[i]);
+			print_status(db, new_node);
+			new_node->close_node(db, new_node);
+			free(new_node);
+		}
+	}
+	return;
+}
 int db_close(struct DB *db) {
 	return db->close(db);
 }
@@ -72,15 +105,15 @@ int db_insert(struct DB *db, void *key, size_t key_len,
 }
 int split(struct DB *db, int i)
 {
-	printf("We splitting node %d\n", db->node->num_vertix);
+	//printf("We splitting node %d\n", db->node->num_vertix);
 	struct Node *x = db->node;
 	struct Node *z = db->create_node(db);
 	struct Node *y = db->open_node(db, x->children[i]);
 
 	z->leaf = y->leaf;
-	print_node(x);
-	print_node(y);
-	print_node(z);
+	//print_node(x);
+	//print_node(y);
+	//print_node(z);
 
 	z->n = db->t-1;
 	z->keys = (struct DBT *)malloc(sizeof(*z->keys)*z->n);
@@ -98,10 +131,10 @@ int split(struct DB *db, int i)
 			z->children[j] = y->children[j+db->t];
 		}
 	}
-	print_node(z);
+	//print_node(z);
 
 	y->n = db->t-1;
-	print_node(y);
+	//print_node(y);
 
 	for (j = x->n; j >= i+1; j--) {
 		x->children[j+1] = x->children[j];
@@ -121,7 +154,7 @@ int split(struct DB *db, int i)
 	memcpy(x->values[i].data, y->values[db->t-1].data, x->values[i].size);
 	
 	x->n++;
-	print_node(x);
+	//print_node(x);
 
 	db->block_api->write_block(db, z);
 	z->close_node(db, z);
@@ -130,15 +163,44 @@ int split(struct DB *db, int i)
 	db->block_api->write_block(db, x);
 	return 0;
 }
+int new_memcmp(void *f1, void *f2, size_t sf1, size_t sf2)
+{
+	int res;
+	if (sf1 > sf2)
+		res = 1;
+	else if (sf2 > sf1)
+		res = -1;
+	else
+		res = memcmp(f1, f2, sf1);
+	return res;
+}
 int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 {
 	int i = db->node->n-1;
-	print_node(db->node);
+	//print_node(db->node);
 	if (db->node->leaf) {
-		printf("This %d is leaf\n", db->node->num_vertix);
+		if (i > 0) {
+			while(i >= 0 &&  new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) > 0) {
+				i--;
+			}
+			if (new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) == 0) {
+				db->node->keys[i].size = key->size;
+				free(db->node->keys[i].data);
+				db->node->keys[i].data = calloc(db->node->keys[i].size, 1);
+				memcpy(db->node->keys[i].data, key->data, db->node->keys[i].size);
+
+				db->node->values[i].size = value->size;
+				free(db->node->values[i].data);
+				db->node->values[i].data = calloc(db->node->values[i].size, 1);
+				memcpy(db->node->values[i].data, value->data, db->node->values[i].size);
+				db->block_api->write_block(db, db->node);
+				return 0;
+			}
+		}
+		i = db->node->n-1;
 		if (db->node->n) {
 			//printf("We have %d elements\n", db->node->n);
-			fflush(stdout);
+			//fflush(stdout);
 			db->node->keys = (struct DBT *)realloc(db->node->keys, (db->node->n+1)*sizeof(*db->node->keys));
 			db->node->values = (struct DBT *)realloc(db->node->values, (db->node->n+1)*sizeof(*db->node->values));
 			//db->node->data_keys = (struct DBT *)realloc(db->node->data_keys, (db->node->n+1)*sizeof(*db->node->data_keys));
@@ -146,21 +208,21 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 		}
 		else {
 			//printf("We dont have any element yet\n");
-			fflush(stdout);
+			//fflush(stdout);
 			db->node->keys = (struct DBT *)malloc((db->node->n+1)*sizeof(*db->node->keys));
 			db->node->values = (struct DBT *)malloc((db->node->n+1)*sizeof(*db->node->values));
 			//db->node->data_keys = (struct DBT *)malloc(db->node->data_keys, (db->node->n+1)*sizeof(*db->node->data_keys));
 			//db->node->data_values = (struct DBT *)malloc(db->node->data_values, (db->node->n+1)*sizeof(*db->node->data_values));
 		}
 
-		while(i >= 0 &&  memcmp(db->node->keys[i].data, key->data, 
-			key->size > db->node->keys[i].size ? key->size:db->node->keys[i].size) > 0) {
+		while(i >= 0 &&  new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) > 0) {
 			db->node->keys[i+1] = db->node->keys[i];
 			db->node->values[i+1] = db->node->values[i];
 			i--;
 		}
 		//return 0;
 		//printf("We insert elem %d in %d\n", *(int *)key->data, i+1);
+		
 		db->node->keys[i+1].size = key->size;
 		db->node->keys[i+1].data = calloc(key->size, 1);
 		memcpy(db->node->keys[i+1].data, key->data, key->size);
@@ -173,12 +235,22 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 		db->block_api->write_block(db, db->node);
 		//db->close_node(db);
 	} else {
-		printf("This %d is not a leaf\n", db->node->num_vertix);
-		while(i >= 0 &&  memcmp(db->node->keys[i].data, key->data, 
-			key->size > db->node->keys[i].size ? key->size:db->node->keys[i].size) > 0) {
+		while(i >= 0 && new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) > 0) {
 			i--;
 		}
-		//return 0;
+		if (i >= 0 && new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) == 0) {
+			db->node->keys[i].size = key->size;
+			free(db->node->keys[i].data);
+			db->node->keys[i].data = calloc(db->node->keys[i].size, 1);
+			memcpy(db->node->keys[i].data, key->data, db->node->keys[i].size);
+
+			db->node->values[i].size = value->size;
+			free(db->node->values[i].data);
+			db->node->values[i].data = calloc(db->node->values[i].size, 1);
+			memcpy(db->node->values[i].data, value->data, db->node->values[i].size);
+			db->block_api->write_block(db, db->node);
+			return 0;
+		}
 		i++;
 		struct Node *node = db->open_node(db, db->node->children[i]);
 		if (node->n == 2*db->t-1) {
@@ -188,11 +260,22 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 			db->node->children = (int *)realloc(db->node->children, (db->node->n+2)*sizeof(*db->node->children));
 
 			split(db, i);
-			if (memcmp(db->node->keys[i].data, key->data, 
-			key->size > db->node->keys[i].size ? key->size:db->node->keys[i].size) < 0)
+			if (new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) < 0)
 				i++;
+			else if (new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) == 0) {
+				db->node->keys[i].size = key->size;
+				free(db->node->keys[i].data);
+				db->node->keys[i].data = calloc(db->node->keys[i].size, 1);
+				memcpy(db->node->keys[i].data, key->data, db->node->keys[i].size);
+
+				db->node->values[i].size = value->size;
+				free(db->node->values[i].data);
+				db->node->values[i].data = calloc(db->node->values[i].size, 1);
+				memcpy(db->node->values[i].data, value->data, db->node->values[i].size);
+				db->block_api->write_block(db, db->node);
+				return 0;
+			}
 		}
-		printf("We insert elem in : %d\n", db->node->children[i]);
 		node = db->open_node(db, db->node->children[i]);
 		struct Node *root = db->node;
 		db->node = node;
@@ -210,8 +293,8 @@ int insert(struct DB *db, struct DBT *key, struct DBT *value)
 	struct Node *r = db->node;
 	if (r->n == 2*db->t - 1) {
 		//printf("We are splitting node\n");
-		printf("Vertix %d is full, we create new vertix\n", r->num_vertix);
-		fflush(stdout);
+		//printf("Vertix %d is full, we create new vertix\n", r->num_vertix);
+		//fflush(stdout);
 		db->node = db->create_node(db);
 		struct Node *s = db->node;
 		s->leaf = 0;
@@ -220,13 +303,14 @@ int insert(struct DB *db, struct DBT *key, struct DBT *value)
 		s->keys = (struct DBT *)malloc((s->n+1)*sizeof(*s->keys));
 		s->values = (struct DBT *)malloc((s->n+1)*sizeof(*s->values));
 		s->children[0] = r->num_vertix;
+		db->block_api->write_block(db, r);
 		r->close_node(db, r);
 		free(r);
 		split(db, 0);
 		insert_nonfull(db, key, value);
 	}
 	else {
-		printf("Vertix %d is not full\n", r->num_vertix);
+		//printf("Vertix %d is not full\n", r->num_vertix);
 		insert_nonfull(db, key, value);
 	}
 	return 0;
@@ -234,46 +318,56 @@ int insert(struct DB *db, struct DBT *key, struct DBT *value)
 int sselect(struct DB *db, struct DBT *key, struct DBT *data)
 {
 	int i = 0;
-	//print_node(db->node);
-	while(i < db->node->n && memcmp(db->node->keys[i].data, key->data, 
-			key->size > db->node->keys[i].size ? key->size:db->node->keys[i].size) < 0) {
-		i++;
+	int flg = 1;
+	struct Node *node = db->node;
+	int first = 0;
+	while(flg) {
+		while(i < node->n && new_memcmp(node->keys[i].data, key->data, node->keys[i].size, key->size) < 0) {
+			i++;
+		}
+		if (i < node->n &&  new_memcmp(node->keys[i].data, key->data, node->keys[i].size, key->size) == 0) {
+			data->size = node->values[i].size;
+			data->data = calloc(data->size, 1);
+			memcpy(data->data, node->values[i].data, data->size);
+			if (first) {
+				node->close_node(db, node);
+				free(node);
+			}
+			return i;
+		}
+		else if (node->leaf) {
+			if (first) {
+				node->close_node(db, node);
+				free(node);
+			}
+			return -1;
+		}
+		int child = node->children[i];
+		if (first) {
+			node->close_node(db, node);
+		}
+		node = db->open_node(db, child);
+		first = 1;
+		i = 0;
 	}
-	if (i < db->node->n &&  memcmp(db->node->keys[i].data, key->data, 
-			key->size > db->node->keys[i].size ? key->size:db->node->keys[i].size) == 0) {
-		data->size = db->node->values[i].size;
-		data->data = calloc(data->size, 1);
-		memcpy(data->data, db->node->values[i].data, data->size);
-		return i;
-	}
-	else if (db->node->leaf) {
-		return -1;
-	}
-	struct Node *root_node = db->node;
-
-	//printf("This is num of next node %d\n", db->node->children[i]);
-	db->node = db->open_node(db, db->node->children[i]);
-	int flg = sselect(db, key, data);
-	db->node->close_node(db, db->node);
-	free(db->node);
-	db->node = root_node;
-
 	return flg;
 }
 int cclose(struct DB *db)
 {
 	//printf("Start db_close\n");
-	fflush(stdout);
+	//fflush(stdout);
+	//print_status(db, db->node);
 	lseek(db->block_api->fd, 0, SEEK_SET);
 	write(db->block_api->fd, &db->node->num_vertix, sizeof(db->node->num_vertix));
 	db->block_api->write_bitmask(db->block_api);
+	db->block_api->write_block(db, db->node);
 	db->node->close_node(db, db->node);
 	db->block_api->free(db->block_api);
 	free(db->block_api);
 	free(db->node);
 	free(db);
 	//printf("End db_close\n");
-	fflush(stdout);
+	//fflush(stdout);
 	return 0;
 }
 struct DB *dbcreate(const char *file, struct DBC *conf)
@@ -304,11 +398,11 @@ struct DB *dbcreate(const char *file, struct DBC *conf)
 	db->block_api->bitmap->first_empty = &first_empty;
 	db->block_api->bitmap->show = &show;
 
-	printf("Attempt to open file %s\n", file);
+	//printf("Attempt to open file %s\n", file);
 	fflush(stdout);
 	db->block_api->fd = open(file, O_RDWR);
 	if (db->block_api->fd == -1) {
-		printf("File doesnt exist, we are creating it now\n");
+		//printf("File doesnt exist, we are creating it now\n");
 		//create file
 		db->block_api->fd = open(file, O_RDWR | O_CREAT);
 
@@ -337,7 +431,7 @@ struct DB *dbcreate(const char *file, struct DBC *conf)
 		db->block_api->write_block(db, db->node);
 	} 
 	else {
-		printf("File already created, we are reading from it\n");
+		//printf("File already created, we are reading from it\n");
 		int num_vertix;
 		read(db->block_api->fd, &num_vertix, sizeof(num_vertix));
 		db->block_api->read_bitmask(db->block_api);
@@ -345,37 +439,4 @@ struct DB *dbcreate(const char *file, struct DBC *conf)
 	}
 
 	return db;
-}
-void print_status(struct DB *db, struct Node *node)
-{
-	printf("In node %d exist %d keys and values\n", node->num_vertix, node->n);
-	if (node->leaf)
-		printf("This node is also a leaf\n");
-	else
-		printf("This node is not a leaf\n");
-	int i;
-	for (i = 0; i < node->n; i++) {
-		printf("Size of key is %d and value is %d\n", node->keys[i].size, 
-			*(int *)node->keys[i].data);
-		printf("Size of value is %d and value is %d\n", node->values[i].size, 
-			*(int *)node->values[i].data);
-	}
-
-	if (!node->leaf) {
-		for (i = 0; i < node->n+1; i++) {
-			printf("Child %d is %d\n", i, node->children[i]);
-		}
-	}
-	printf("\n");
-	fflush(stdout);
-
-	if (!node->leaf) {
-		for (i = 0; i < node->n+1; i++) {
-			struct Node *new_node = db->open_node(db, node->children[i]);
-			print_status(db, new_node);
-			new_node->close_node(db, new_node);
-			free(new_node);
-		}
-	}
-	return;
 }

@@ -1,7 +1,7 @@
 #include <stddef.h>
 struct DBT {
 	void  *data;
-	size_t size;
+	char size;
 };
 struct DB;
 struct Node

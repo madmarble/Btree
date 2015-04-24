@@ -13,10 +13,10 @@ int init(struct bitmap *bitmap, int n)
 }
 int ffree(struct bitmap *bitmap)
 {
-	printf("Start free for bitmap\n");
+	//printf("Start free for bitmap\n");
 	fflush(stdout);
 	free(bitmap->bitmask);
-	printf("End free for bitmap\n");
+	//printf("End free for bitmap\n");
 	fflush(stdout);
 	return 0;
 }
@@ -168,12 +168,12 @@ int clear_block(struct DB *db, int num_vertix)
 }
 int fffree(struct BlockAPI *block_api)
 {
-	printf("Start free for block_api\n");
+	//printf("Start free for block_api\n");
 	fflush(stdout);
 	block_api->bitmap->free(block_api->bitmap);
 	free(block_api->bitmap);
 	close(block_api->fd);
-	printf("End free for block_api\n");
+	//printf("End free for block_api\n");
 	fflush(stdout);
 	return 0;
 }

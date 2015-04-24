@@ -75,5 +75,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	std::cerr << "Overall lib time: " << ((double )time / 1e9) << "\n";
+	db->close();
 	return 0;
 }
