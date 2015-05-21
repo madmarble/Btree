@@ -91,20 +91,10 @@ int read_block(struct DB *db, struct Node *node)
 {
 	int i;
 	lseek(db->block_api->fd, node->num_vertix*db->block_api->page_size, SEEK_SET);
-	//read(db->block_api->fd, &db->num_vertix, sizeof(db->num_vertix));
 
 	//read meta data
 	read(db->block_api->fd, &node->n, sizeof(node->n));
 	read(db->block_api->fd, &node->leaf, sizeof(node->leaf));
-
-	//read array of sizes and offsets
-	//db->node->data_keys = (struct BlockData *)malloc(sizeof(*db->node->data_keys)*db->node->n);
-	//db->node->data_values = (struct BlockData *)malloc(sizeof(*db->node->data_values)*db->node->n);
-	//db->node->data_children = (struct BlockData *)malloc(sizeof(*db->node->data_children)*(db->node->n+1));
-	//read(db->block_api->fd, db->node->data_keys, db->node->n*sizeof(*db->node->data_keys));
-	//read(db->block_api->fd, db->node->data_values, db->node->n*sizeof(*db->node->data_values));
-	//if (!db->node->leaf)
-	//	read(db->block_api->fd, db->node->data_children, (db->node->n+1)*sizeof(*db->node->data_children));
 
 	//read keys, values and children
 	node->keys = (struct DBT *)malloc(node->n*sizeof(*node->keys));
@@ -130,20 +120,10 @@ int write_block(struct DB *db, struct Node *node)
 {
 	int i;
 	lseek(db->block_api->fd, node->num_vertix*db->block_api->page_size, SEEK_SET);
-	//write(db->block_api->fd, &db->num_vertix, sizeof(db->num_vertix));
 
 	//write meta data
 	write(db->block_api->fd, &node->n, sizeof(node->n));
 	write(db->block_api->fd, &node->leaf, sizeof(node->leaf));
-
-	//write array of sizes and offsets
-	//write(db->block_api->fd, db->node->data_keys, 
-	//	db->node->n*sizeof(*db->node->data_keys));
-	//write(db->block_api->fd, db->node->data_values, 
-	//	db->node->n*sizeof(*db->node->data_values));
-	//if (!db->node->leaf)
-	//	write(db->block_api->fd, db->node->data_children, 
-	//		(db->node->n+1)*sizeof(*db->node->data_children));
 
 	//write keys, values and children
 	for(i = 0; i < node->n; i++) {
@@ -203,16 +183,30 @@ struct Node * create_node(struct DB *db)
 	node->num_vertix = db->block_api->bitmap->first_empty(db->block_api->bitmap);
 	db->block_api->bitmap->set(db->block_api->bitmap, node->num_vertix);
 	node->close_node = &close_node;
-	node->write = 0;
+	node->write_node = &write_node;
+	node->delete_node = &delete_node;
 	return node;
 }
 struct Node * open_node(struct DB *db, int num_vertix)
 {
 	struct Node *node = (struct Node *)malloc(sizeof(*node));
 	node->close_node = &close_node;
+	node->write_node = &write_node;
+	node->delete_node = &delete_node;
 	node->num_vertix = num_vertix;
 	db->block_api->read_block(db, node);
 	return node;
+}
+int write_node(struct DB *db, struct Node *node)
+{
+	return db->block_api->write_block(db, node);
+}
+int delete_node(struct DB *db, struct Node *node)
+{
+	db->block_api->clear_block(db, node->num_vertix);
+	db->block_api->bitmap->unset(db->block_api->bitmap, node->num_vertix);
+	db->block_api->write_bitmask(db->block_api);
+	return 0;
 }
 int close_node(struct DB *db, struct Node *node)
 {
@@ -225,9 +219,5 @@ int close_node(struct DB *db, struct Node *node)
 	free(node->values);
 	if (!node->leaf)
 		free(node->children);
-	//free(db->node->data_keys);
-	//free(db->node->data_values);
-	//free(db->node->data_children);
-	//free(node);
 	return 0;
 }

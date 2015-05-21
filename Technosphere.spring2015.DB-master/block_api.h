@@ -13,17 +13,16 @@ struct Node
 	struct DBT *values;
 	int *children;
 	char write;
-	//struct BlockData *data_keys;
-	//struct BlockData *data_values;
-	//struct BlockData *data_children;
 	int (*close_node)(struct DB *db, struct Node *node);
+	int (*write_node)(struct DB *db, struct Node *node);
+	int (*delete_node)(struct DB *db, struct Node *node);
 };
 
 struct DB {
 	/* Public API */
 	/* Returns 0 on OK, -1 on Error */
 	int (*close)(struct DB *db);
-	int (*delete)(struct DB *db, struct DBT *key);
+	int (*delete)(struct DB *db, struct Node *node, struct DBT *key);
 	int (*insert)(struct DB *db, struct DBT *key, struct DBT *data);
 	/* * * * * * * * * * * * * *
 	 * Returns malloc'ed data into 'struct DBT *data'.
@@ -106,7 +105,10 @@ int clear_block(struct DB *db, int num_vertix);
 int insert(struct DB *db, struct DBT *key, struct DBT *value);
 int sselect(struct DB *db, struct DBT *key, struct DBT *data);
 int cclose(struct DB *db);
+int ddelete(struct DB *db, struct Node* node, struct DBT *key);
 
 struct Node * create_node(struct DB *db);
 struct Node * open_node(struct DB *db, int num_vertix);
 int close_node(struct DB *db, struct Node *node);
+int write_node(struct DB *db, struct Node *node);
+int delete_node(struct DB *db, struct Node *node);
