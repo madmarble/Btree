@@ -120,9 +120,6 @@ int split(struct DB *db, int i)
 	struct Node *y = db->open_node(db, x->children[i]);
 
 	z->leaf = y->leaf;
-	//print_node(x);
-	//print_node(y);
-	//print_node(z);
 
 	z->n = db->t-1;
 	z->keys = (struct DBT *)malloc(sizeof(*z->keys)*z->n);
@@ -140,10 +137,8 @@ int split(struct DB *db, int i)
 			z->children[j] = y->children[j+db->t];
 		}
 	}
-	//print_node(z);
 
 	y->n = db->t-1;
-	//print_node(y);
 
 	for (j = x->n; j >= i+1; j--) {
 		x->children[j+1] = x->children[j];
@@ -163,7 +158,6 @@ int split(struct DB *db, int i)
 	memcpy(x->values[i].data, y->values[db->t-1].data, x->values[i].size);
 	
 	x->n++;
-	//print_node(x);
 
 	z->write_node(db, z);
 	z->close_node(db, z);
@@ -175,15 +169,15 @@ int split(struct DB *db, int i)
 	return 0;
 }
 
-int new_memcmp(void *f1, void *f2, size_t sf1, size_t sf2)
+int new_memcmp(struct DBT t1, struct DBT t2)
 {
 	int res;
-	if (sf1 > sf2)
+	if (t1.size > t2.size)
 		res = 1;
-	else if (sf2 > sf1)
+	else if (t2.size > t1.size)
 		res = -1;
 	else
-		res = memcmp(f1, f2, sf1);
+		res = memcmp(t1.data, t2.data, t1.size);
 	return res;
 }
 
@@ -193,10 +187,10 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 	//print_node(db->node);
 	if (db->node->leaf) {
 		if (i > 0) {
-			while(i >= 0 &&  new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) > 0) {
+			while(i >= 0 &&  new_memcmp(db->node->keys[i], *key) > 0) {
 				i--;
 			}
-			if (new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) == 0) {
+			if (new_memcmp(db->node->keys[i], *key) == 0) {
 				db->node->keys[i].size = key->size;
 				free(db->node->keys[i].data);
 				db->node->keys[i].data = calloc(db->node->keys[i].size, 1);
@@ -212,24 +206,19 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 		}
 		i = db->node->n-1;
 		if (db->node->n) {
-			//printf("We have %d elements\n", db->node->n);
-			//fflush(stdout);
 			db->node->keys = (struct DBT *)realloc(db->node->keys, (db->node->n+1)*sizeof(*db->node->keys));
 			db->node->values = (struct DBT *)realloc(db->node->values, (db->node->n+1)*sizeof(*db->node->values));
 		}
 		else {
-			//printf("We dont have any element yet\n");
-			//fflush(stdout);
 			db->node->keys = (struct DBT *)malloc((db->node->n+1)*sizeof(*db->node->keys));
 			db->node->values = (struct DBT *)malloc((db->node->n+1)*sizeof(*db->node->values));
 		}
 
-		while(i >= 0 &&  new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) > 0) {
+		while(i >= 0 &&  new_memcmp(db->node->keys[i], *key) > 0) {
 			db->node->keys[i+1] = db->node->keys[i];
 			db->node->values[i+1] = db->node->values[i];
 			i--;
 		}
-		//return 0;
 		//printf("We insert elem %d in %d\n", *(int *)key->data, i+1);
 		
 		db->node->keys[i+1].size = key->size;
@@ -241,16 +230,12 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 		memcpy(db->node->values[i+1].data, value->data, value->size);
 
 		db->node->n++;
-		//printf("azaza\n");
-		//fflush(stdout);
 		db->node->write_node(db, db->node);
-		//printf("azaza\n");
-		//fflush(stdout);
 	} else {
-		while(i >= 0 && new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) > 0) {
+		while(i >= 0 && new_memcmp(db->node->keys[i], *key) > 0) {
 			i--;
 		}
-		if (i >= 0 && new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) == 0) {
+		if (i >= 0 && new_memcmp(db->node->keys[i], *key) == 0) {
 			db->node->keys[i].size = key->size;
 			free(db->node->keys[i].data);
 			db->node->keys[i].data = calloc(db->node->keys[i].size, 1);
@@ -272,9 +257,9 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 			db->node->children = (int *)realloc(db->node->children, (db->node->n+2)*sizeof(*db->node->children));
 
 			split(db, i);
-			if (new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) < 0)
+			if (new_memcmp(db->node->keys[i], *key) < 0)
 				i++;
-			else if (new_memcmp(db->node->keys[i].data, key->data, db->node->keys[i].size, key->size) == 0) {
+			else if (new_memcmp(db->node->keys[i], *key) == 0) {
 				db->node->keys[i].size = key->size;
 				free(db->node->keys[i].data);
 				db->node->keys[i].data = calloc(db->node->keys[i].size, 1);
@@ -291,7 +276,7 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 		node = db->open_node(db, db->node->children[i]);
 		struct Node *root = db->node;
 		db->node = node;
-		insert_nonfull(db, key, value);
+		db->insert(db, key, value);
 		db->node->write_node(db, db->node);
 		db->node->close_node(db, db->node);
 		free(db->node);
@@ -332,15 +317,17 @@ int insert(struct DB *db, struct DBT *key, struct DBT *value)
 
 int sselect(struct DB *db, struct DBT *key, struct DBT *data)
 {
+	if (db->node->n == 0)
+		return 0;
 	int i = 0;
 	int flg = 1;
 	struct Node *node = db->node;
 	int first = 0;
 	while(flg) {
-		while(i < node->n && new_memcmp(node->keys[i].data, key->data, node->keys[i].size, key->size) < 0) {
+		while(i < node->n && new_memcmp(node->keys[i], *key) < 0) {
 			i++;
 		}
-		if (i < node->n &&  new_memcmp(node->keys[i].data, key->data, node->keys[i].size, key->size) == 0) {
+		if (i < node->n &&  new_memcmp(node->keys[i], *key) == 0) {
 			data->size = node->values[i].size;
 			data->data = calloc(data->size, 1);
 			memcpy(data->data, node->values[i].data, data->size);
@@ -355,6 +342,9 @@ int sselect(struct DB *db, struct DBT *key, struct DBT *data)
 				node->close_node(db, node);
 				free(node);
 			}
+			data->data = NULL;
+			data->size = 0;
+			//printf("can not find elem %s\n", (char *)key->data);
 			return -1;
 		}
 		int child = node->children[i];
@@ -379,8 +369,8 @@ int make_realloc(struct Node *node)
 
 int delete_key(struct Node *node, int index)
 {
-	printf("In delete_key\n");
-	fflush(stdout);
+	//printf("In delete_key\n");
+	//fflush(stdout);
 	free(node->keys[index].data);
 	free(node->values[index].data);
 	int i = index;
@@ -399,14 +389,13 @@ int delete_key(struct Node *node, int index)
 	}
 	node->n--;
 	make_realloc(node);
-	print_node(node);
 	return 0;
 }
 
 int find_key(struct Node *node, struct DBT *key)
 {
 	int i = node->n-1;
-	while(i >= 0 && new_memcmp(node->keys[i].data, key->data, node->keys[i].size, key->size)) {
+	while(i >= 0 && new_memcmp(node->keys[i], *key)) {
 		i--;
 	}
 	return i;
@@ -421,209 +410,182 @@ struct DBT deep_copy(struct DBT resource)
 	return result;
 }
 
-struct DBT * resursive_delete_previous(struct DB *db, struct Node *node, int index)
+struct DBT * find_previous_key(struct DB *db, struct Node *node, struct DBT *key)
 {
-	printf("In resursive_delete_previous\n");
-	fflush(stdout);
-
-	printf("Node\n");
-	print_node(node);
-
 	if (node->leaf) {
-		printf("maybe dangerous, checking this\n");
-		delete_key(node, index);
-		node->write_node(db, node);
-		print_node(node);
-		return NULL;
+		struct DBT *previous = (struct DBT *)malloc(2*sizeof(*previous));
+		previous[0] = deep_copy(node->keys[node->n-1]);
+		previous[1] = deep_copy(node->values[node->n-1]);
+		return previous;
 	}
+	return find_previous_key(db, db->open_node(db, node->children[node->n]), key);
+}
 
-	struct Node *left_child = db->open_node(db, node->children[index]);
-
-	printf("left_child\n");
-	fflush(stdout);
-	print_node(left_child);
-
-	if (left_child->n >= db->t) {
-		// we will delete last element in left child and return key and value
-		printf("we in left_child\n");
-		fflush(stdout);
-
-		int i = left_child->n-1;
-		if (left_child->leaf) {
-			struct DBT return_key = deep_copy(left_child->keys[i]);
-			struct DBT return_value = deep_copy(left_child->values[i]);
-
-			delete_key(left_child, i);
-			left_child->write_node(db, left_child);
-
-			struct DBT *return_pair = (struct DBT *)malloc(2*sizeof(*return_pair));
-			return_pair[0] = return_key;
-			return_pair[1] = return_value;
-			return return_pair;
-		}
-		else {
-			return resursive_delete_previous(db, left_child, i);
-		}
+struct DBT * find_next_key(struct DB *db, struct Node *node, struct DBT *key)
+{
+	if (node->leaf) {
+		struct DBT *previous = (struct DBT *)malloc(2*sizeof(*previous));
+		previous[0] = deep_copy(node->keys[0]);
+		previous[1] = deep_copy(node->values[0]);
+		return previous;
 	}
-
-	struct Node *right_child = db->open_node(db, node->children[index+1]);
-
-	printf("right_child\n");
-	fflush(stdout);
-	print_node(right_child);
-
-	if (right_child->n >= db->t) {
-		//we will delete first element in right child and return key and value
-		printf("we in right_child\n");
-		fflush(stdout);
-
-		int i = 0;
-		if (right_child->leaf) {
-			struct DBT return_key = deep_copy(right_child->keys[i]);
-			struct DBT return_value = deep_copy(right_child->values[i]);
-
-			delete_key(right_child, i);
-			right_child->write_node(db, right_child);
-
-			struct DBT *return_pair = (struct DBT *)malloc(2*sizeof(*return_pair));
-			return_pair[0] = return_key;
-			return_pair[1] = return_value;
-			return return_pair;
-		}
-		else {
-			return resursive_delete_previous(db, right_child, i);
-		}
-	}
-
-	//unite two child : left and right
-	printf("Unite child\n");
-	fflush(stdout);
-
-	int left_child_size = left_child->n;
-	left_child->n += right_child->n+1;
-	make_realloc(left_child);
-
-	left_child->keys[left_child_size] = deep_copy(node->keys[index]); ///??
-	left_child->values[left_child_size] = deep_copy(node->values[index]);
-
-	int i;
-	for (i = 0; i < right_child->n; i++) {
-		left_child->keys[i+left_child_size+1] = right_child->keys[i];
-		left_child->values[i+left_child_size+1] = right_child->values[i];
-	}
-	if (!left_child->leaf && !right_child->leaf) {
-		for (i = 0; i < right_child->n+1; i++) {
-			left_child->children[i+left_child_size+1] = right_child->children[i];
-		}
-	}
-
-	delete_key(node, index);
-	left_child->write_node(db, left_child);
-	node->write_node(db, node);
-
-	return resursive_delete_previous(db, left_child, left_child_size);
+	return find_next_key(db, db->open_node(db, node->children[0]), key);
 }
 
 int ddelete(struct DB *db, struct Node *node, struct DBT *key)
 {
-	printf("This is our key : %d %s\n", key->size, (char *)key->data);
-	fflush(stdout);
-
-	print_node(node);
-	fflush(stdout);
+	//printf("This is our key : %d %s\n", key->size, (char *)key->data);
+	//fflush(stdout);
 
 	int i = find_key(node, key);
 	if (i >= 0 && node->leaf) {
-		printf("Leaf and we find element\n");
-		fflush(stdout);
+		//printf("Leaf and we find element\n");
+		//fflush(stdout);
 		delete_key(node, i);
 		node->write_node(db, node);
 		return 0;
 	}
 
 	if (i < 0 && node->leaf) {
-		printf("Can not find elem in btree\n");
-		fflush(stdout);
+		//printf("Can not find elem in btree\n");
+		//fflush(stdout);
+		db->node->write_node(db, db->node);
+		node->write_node(db, node);
 		return 0;
 	}
 
-	if (i >= 0 && !node->leaf) {
-		printf("Element in node, but its not a leaf\n");
-		fflush(stdout);
+	if (i >= 0) {
+		//printf("Element in node, but its not a leaf\n");
+		//fflush(stdout);
 
-		struct DBT *previous_pair = resursive_delete_previous(db, node, i);
-		if (previous_pair == NULL) {
-			return 0;
+		struct Node *left_child;
+		struct  Node *right_child;
+		for (int j = i; j <= i + 1; ++j)
+		{
+			struct Node *child = db->open_node(db, node->children[j]);
+			if (child->n >= db->t)
+			{
+				//if (j == i) printf("left_child\n");
+				//else printf("right_child\n");
+				int child_index = j == i ? child->n-1 : 0;
+
+				struct DBT *previous;
+				if (child_index == 0)
+					previous = find_next_key(db, child, key);
+				else
+					previous = find_previous_key(db, child, key);
+
+				ddelete(db, child, &previous[0]);
+				child->write_node(db, child);
+
+				node->keys[i] = previous[0];
+				node->values[i] = previous[1];
+				node->write_node(db, node);
+
+				return 0;
+			}
+			else {
+				//printf("Not enough element\n");
+				//fflush(stdout);
+			}
+
+			if (j == i) left_child = child;
+			else right_child = child;
 		}
-		else {
-			node->keys[i] = previous_pair[0];
-			node->values[i] = previous_pair[1];
-			node->write_node(db, node);
-			return 0;
+
+		//unite two child : left and right
+		//printf("Unite child\n");
+		//fflush(stdout);
+
+		int left_child_size = left_child->n;
+		left_child->n += right_child->n+1;
+		make_realloc(left_child);
+
+		left_child->keys[left_child_size] = deep_copy(node->keys[i]); 
+		left_child->values[left_child_size] = deep_copy(node->values[i]);
+
+		int j;
+		for (j = 0; j < right_child->n; j++) {
+			left_child->keys[j+left_child_size+1] = right_child->keys[j];
+			left_child->values[j+left_child_size+1] = right_child->values[j];
 		}
+		if (!left_child->leaf && !right_child->leaf) {
+			for (j = 0; j < right_child->n+1; j++) {
+				left_child->children[j+left_child_size+1] = right_child->children[j];
+			}
+		}
+
+		delete_key(node, i);
+
+		left_child->write_node(db, left_child);
+		node->write_node(db, node);
+
+		return ddelete(db, left_child, key);
 	}
 
 	//printf("Element not here, try to find new node for processing\n");
-	fflush(stdout);
+	//fflush(stdout);
 
-	i = node->n-1;
-	while(i >= 0 && new_memcmp(node->keys[i].data, key->data, node->keys[i].size, key->size) > 0) {
-		i--;
+	i = 0;
+	while(i < node->n && new_memcmp(node->keys[i], *key) < 0) {
+		i++;
 	}
-
-	//printf("We open child number %d\n", i+1);
-	struct Node *new_node = db->open_node(db, node->children[i+1]);
-	//printf("New node number %d and size %d\n", new_node->num_vertix, new_node->n);
+	struct Node *new_node = db->open_node(db, node->children[i]);
 
 	if (new_node->n < db->t) {
 		//printf("Not enough element in new node\n");
-		fflush(stdout);
-		//printf("Print new_node\n");
-		//print_node(new_node);
-		fflush(stdout);
+		//fflush(stdout);
 
-		if (i >= 0) {
+		if (i-1 >= 0) {
 			//printf("Try left child\n");
-			fflush(stdout);
-			struct Node *neighbour1 = db->open_node(db, node->children[i]);
-			//printf("neighbour1 number %d and size %d\n", neighbour1->num_vertix, neighbour1->n);
+			//fflush(stdout);
+
+			struct Node *neighbour1 = db->open_node(db, node->children[i-1]);
+
 			if (neighbour1->n >= db->t) {
 				//printf("we are in left child\n");
-				fflush(stdout);
-				//print_node(neighbour1);
-				fflush(stdout);
+				//fflush(stdout);
 
 				new_node->n++;
 				make_realloc(new_node);
 
-				struct DBT last_key = neighbour1->keys[neighbour1->n-1];
-				struct DBT last_value = neighbour1->values[neighbour1->n-1];
+				struct DBT last_key = deep_copy(neighbour1->keys[neighbour1->n-1]);
+				struct DBT last_value = deep_copy(neighbour1->values[neighbour1->n-1]);
+
 				int last_child = -1;
 				if (!neighbour1->leaf)
 					last_child = neighbour1->children[neighbour1->n];
 
-				struct DBT key_separator = node->keys[i];
-				struct DBT value_separator = node->values[i];
+				struct DBT key_separator = node->keys[i-1];
+				struct DBT value_separator = node->values[i-1];
 
-				node->keys[i] = last_key;
-				node->values[i] = last_value;
+				node->keys[i-1] = last_key;
+				node->values[i-1] = last_value;
 
-				int j = new_node->n-1;
-				while(j > 0) {
+				int j;
+				int fflg = -1;
+				for (j = 0; j < new_node->n-1 && fflg == -1; j++) {
+					if (new_memcmp(new_node->keys[j], last_key) >= 0) {
+						fflg = j;
+					}
+				}
+
+				j = new_node->n-1;
+				while(j > fflg) {
 					new_node->keys[j] = new_node->keys[j-1];
 					new_node->values[j] = new_node->values[j-1];
 					j--;
 				}
-				new_node->keys[0] = key_separator;
-				new_node->values[0] = value_separator;
+				new_node->keys[fflg] = key_separator;
+				new_node->values[fflg] = value_separator;
+
 				if (!new_node->leaf) {
-					for (j = new_node->n; j > 0; j--)
+					for (j = new_node->n; j > fflg; j--)
 						new_node->children[j] = new_node->children[j-1];
-					new_node->children[0] = last_child;
+					new_node->children[fflg] = last_child;
 				}
 
-				neighbour1->n--;
-				make_realloc(neighbour1);
+				delete_key(neighbour1, neighbour1->n-1);
 
 				node->write_node(db, node);
 				new_node->write_node(db, new_node);
@@ -632,52 +594,55 @@ int ddelete(struct DB *db, struct Node *node, struct DBT *key)
 				return ddelete(db, new_node, key);
 			}
 		}
-		if (i+2 < node->n+1) {
+		if (i+1 < node->n+1) {
 			//printf("Try right child\n");
-			fflush(stdout);
+			//fflush(stdout);
 
-			struct Node *neighbour2 = db->open_node(db, node->children[i+2]);
-			//printf("neighbour2 number %d and size %d\n", neighbour2->num_vertix, neighbour2->n);
+			struct Node *neighbour2 = db->open_node(db, node->children[i+1]);
 			
 			if (neighbour2->n >= db->t) {
 				//printf("we are in neighbour2\n");
-				fflush(stdout);
-				//print_node(neighbour2);
-				fflush(stdout);
+				//fflush(stdout);
 
 				new_node->n++;
 				make_realloc(new_node);
 
-				struct DBT first_key = neighbour2->keys[0];
-				struct DBT first_value = neighbour2->values[0];
+				struct DBT first_key = deep_copy(neighbour2->keys[0]);
+				struct DBT first_value = deep_copy(neighbour2->values[0]);
 				int first_child = -1;
 				if (!neighbour2->leaf) 
 					first_child = neighbour2->children[0];
 
-				int j = 0;
-				while (j < neighbour2->n-1) {
-					neighbour2->keys[j] = neighbour2->keys[j+1];
-					neighbour2->values[j] = neighbour2->values[j+1];
-					j++;
-				}
-				if (!neighbour2->leaf)
-					for (j = 0; j < neighbour2->n; j++) {
-						neighbour2->children[j] = neighbour2->children[j+1];
-					}
-				neighbour2->n--;
-				make_realloc(neighbour2);
-					
-				struct DBT key_separator = node->keys[i+1];
-				struct DBT value_separator = node->values[i+1];
+				struct DBT key_separator = node->keys[i];
+				struct DBT value_separator = node->values[i];
 
-				node->keys[i+1] = first_key;
-				node->values[i+1] = first_value;
+				node->keys[i] = first_key;
+				node->values[i] = first_value;
 
 				new_node->keys[new_node->n-1] = key_separator;
 				new_node->values[new_node->n-1] = value_separator;
 				if (!new_node->leaf && first_child != -1)
 					new_node->children[new_node->n] = first_child;
 
+				free(neighbour2->keys[0].data);
+				free(neighbour2->values[0].data);
+				int k = 0;
+				while (k < neighbour2->n-1) {
+					neighbour2->keys[k] = neighbour2->keys[k+1];
+					neighbour2->values[k] = neighbour2->values[k+1];
+					k++;
+				}
+
+				if (!neighbour2->leaf) {
+					k = 0;
+					while (k < neighbour2->n) {
+						neighbour2->children[k] = neighbour2->children[k+1];
+						k++;
+					}
+				}
+				neighbour2->n--;
+				make_realloc(neighbour2);
+				
 				node->write_node(db, node);
 				new_node->write_node(db, new_node);
 				neighbour2->write_node(db, neighbour2);
@@ -686,17 +651,14 @@ int ddelete(struct DB *db, struct Node *node, struct DBT *key)
 			}
 			else {
 				//printf("Unite element neighbour2 and new_node\n");
-				fflush(stdout);
-				printf("neighbour2\n");
-				//print_node(neighbour2);
-				fflush(stdout);
+				//fflush(stdout);
 
 				int offset = new_node->n;
 				new_node->n += neighbour2->n+1;
 				make_realloc(new_node);
 
-				new_node->keys[offset] = deep_copy(node->keys[i+1]);
-				new_node->values[offset] = deep_copy(node->values[i+1]);
+				new_node->keys[offset] = deep_copy(node->keys[i]);
+				new_node->values[offset] = deep_copy(node->values[i]);
 
 				int j = 0;
 				while(j < neighbour2->n) {
@@ -709,7 +671,7 @@ int ddelete(struct DB *db, struct Node *node, struct DBT *key)
 						new_node->children[j+1+offset] = neighbour2->children[j];
 				}
 
-				delete_key(node, i+1);
+				delete_key(node, i);
 
 				node->write_node(db, node);
 				new_node->write_node(db, new_node);
@@ -719,20 +681,19 @@ int ddelete(struct DB *db, struct Node *node, struct DBT *key)
 		}
 		else {
 			//printf("Can not open neighbour\n");
-			fflush(stdout);
+			//fflush(stdout);
 
 			//printf("Unite element neighbour1 and new_node\n");
 			struct Node *neighbour1 = NULL;
-			fflush(stdout);
 
-			if (i >= 0) {
-				neighbour1 = db->open_node(db, node->children[i]);
+			if (i-1 >= 0) {
+				neighbour1 = db->open_node(db, node->children[i-1]);
 				int offset = neighbour1->n;
 				neighbour1->n += new_node->n+1;
 				make_realloc(neighbour1);
 
-				neighbour1->keys[offset] = deep_copy(node->keys[i]);
-				neighbour1->values[offset] = deep_copy(node->values[i]);
+				neighbour1->keys[offset] = deep_copy(node->keys[i-1]);
+				neighbour1->values[offset] = deep_copy(node->values[i-1]);
 
 				int j = 0;
 				while(j < new_node->n) {
@@ -745,7 +706,7 @@ int ddelete(struct DB *db, struct Node *node, struct DBT *key)
 						neighbour1->children[j+1+offset] = new_node->children[j];
 				}
 
-				delete_key(node, i);
+				delete_key(node, i-1);
 
 				node->write_node(db, node);
 				neighbour1->write_node(db, neighbour1);
@@ -753,7 +714,7 @@ int ddelete(struct DB *db, struct Node *node, struct DBT *key)
 				return ddelete(db, neighbour1, key);
 			}
 			else {
-				//printf("SUPER UGLY\n");
+				printf("SUPER UGLY\n");
 				fflush(stdout);
 			}
 		}

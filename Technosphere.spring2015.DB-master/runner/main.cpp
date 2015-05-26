@@ -68,8 +68,11 @@ int main(int argc, char *argv[]) {
 			clock_gettime(CLOCK_MONOTONIC, &t2);
 			time += (t2.tv_sec - t1.tv_sec) * 1e9 + (t2.tv_nsec - t1.tv_nsec);
 			db->select(op[1], &val, &val_size);
+			
 			if (!val)
 				out << "delete is ok\n";
+			else
+				out << op[1] << ' ' << val << std::endl;
 		} else {
 			std::cout << "bad op\n";
 		}

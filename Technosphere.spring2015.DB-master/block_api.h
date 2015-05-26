@@ -43,6 +43,7 @@ struct DB {
 	struct Node * (*create_node)(struct DB *db);
 	struct Node * (*open_node)(struct DB *db, int num_vertix);
 	int t;
+	int flag;
 }; /* Need for supporting multiple backends (HASH/BTREE) */
 
 struct DBC {
