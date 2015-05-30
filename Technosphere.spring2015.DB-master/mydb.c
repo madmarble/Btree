@@ -750,6 +750,7 @@ struct DB *dbcreate(const char *file, struct DBC *conf)
 	db->close = &cclose;
 	db->create_node = &create_node;
 	db->open_node = &open_node;
+	db->create_cache = &create_cache;
 	db->t = 4;
 
 	db->block_api = (struct BlockAPI *)malloc(sizeof(struct BlockAPI)*1);
@@ -809,6 +810,7 @@ struct DB *dbcreate(const char *file, struct DBC *conf)
 		db->block_api->read_bitmask(db->block_api);
 		db->node = db->open_node(db, num_vertix);
 	}
+	db->block_cache = db->create_cache();
 	//printf("end\n");
 	return db;
 }

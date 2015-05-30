@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string>
+
 int init(struct bitmap *bitmap, int n)
 {
 	char rest;
@@ -220,4 +222,39 @@ int close_node(struct DB *db, struct Node *node)
 	if (!node->leaf)
 		free(node->children);
 	return 0;
+}
+
+int find_block(struct DB *db, struct Node *node)
+{
+	struct BlockCache *block_cache = db->block_cache;
+	string str;
+	sprintf(str, "%d", node->num_vertix);
+	if (cfuhash_exists(block_cache->all_pages, str)) {
+		return 1;
+	}
+	return 0;
+}
+
+int push_block(struct DB *db, struct Node *node)
+{	
+	struct BlockCache *block_cache = (struct BlockCache *)malloc(sizeof(*block_cache));
+	if (block_cache->size + node-> >= db->MAX_CACHE_SIZE)
+		return 1;
+	return 0;
+}
+
+struct BlockCache * create_cache(void)
+{
+	struct BlockCache *block_cache = (struct BlockCache *)malloc(sizeof(*block_cache));
+	block_cache->n = 0;
+	block_cache->lru = NULL;
+	block_cache->size = 0;
+
+	block_cache->all_pages = cfuhash_new_with_initial_size(0);
+	cfuhash_set_flag(block_cache->all_pages, CFUHASH_FROZEN_UNTIL_GROWS);
+
+	block->cache->find_block = &find_block;
+	block_cache->push_block = &push_block;
+	block_cache->pop_block = &pop_block;
+	return block_cache;
 }
