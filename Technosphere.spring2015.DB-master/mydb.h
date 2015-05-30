@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stddef.h>
 #include "block_api.h"
 /* check `man dbopen` */

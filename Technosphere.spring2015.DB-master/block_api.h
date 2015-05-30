@@ -1,5 +1,9 @@
+#pragma once
+
 #include <stddef.h>
-#include "cfuhash.h"
+
+//#include "cfuhash.h"
+
 struct DBT {
 	void  *data;
 	char size;
@@ -18,9 +22,9 @@ struct Node
 	int *children;
 	char write;
 
-	struct Node *lru_next;
+	/*struct Node *lru_next;
 	struct Node *lru_prev;
-	status stat;
+	status stat;*/
 
 	int (*close_node)(struct DB *db, struct Node *node);
 	int (*write_node)(struct DB *db, struct Node *node);
@@ -31,7 +35,7 @@ struct BlockCache
 {
 	size_t n_pages;
 	struct Node *lru;
-	cfuhash_table_t all_pages;
+	//cfuhash_table_t all_pages;
 	size_t size;
 
 	int (*find_block)(struct DB *db, struct Node *node);
@@ -137,4 +141,7 @@ struct Node * create_node(struct DB *db);
 struct Node * open_node(struct DB *db, int num_vertix);
 int close_node(struct DB *db, struct Node *node);
 int write_node(struct DB *db, struct Node *node);
-int delete_node(struct DB *db, struct Node *node);
+
+struct BlockCache * create_cache(void);
+int push_block(struct DB *db, struct Node *node);
+int find_block(struct DB *db, struct Node *node);

@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string>
-
+#include <string.h>
+int MAX_CACHE_SIZE = 4;
 int init(struct bitmap *bitmap, int n)
 {
 	char rest;
@@ -186,7 +186,6 @@ struct Node * create_node(struct DB *db)
 	db->block_api->bitmap->set(db->block_api->bitmap, node->num_vertix);
 	node->close_node = &close_node;
 	node->write_node = &write_node;
-	node->delete_node = &delete_node;
 	return node;
 }
 struct Node * open_node(struct DB *db, int num_vertix)
@@ -194,7 +193,6 @@ struct Node * open_node(struct DB *db, int num_vertix)
 	struct Node *node = (struct Node *)malloc(sizeof(*node));
 	node->close_node = &close_node;
 	node->write_node = &write_node;
-	node->delete_node = &delete_node;
 	node->num_vertix = num_vertix;
 	db->block_api->read_block(db, node);
 	return node;
@@ -227,33 +225,40 @@ int close_node(struct DB *db, struct Node *node)
 int find_block(struct DB *db, struct Node *node)
 {
 	struct BlockCache *block_cache = db->block_cache;
-	string str;
+	char str[4];
 	sprintf(str, "%d", node->num_vertix);
-	if (cfuhash_exists(block_cache->all_pages, str)) {
+	if (block_cache->size)
+		return 0;
+	/*if (cfuhash_exists(block_cache->all_pages, str)) {
 		return 1;
-	}
+	}*/
 	return 0;
 }
 
 int push_block(struct DB *db, struct Node *node)
 {	
 	struct BlockCache *block_cache = (struct BlockCache *)malloc(sizeof(*block_cache));
-	if (block_cache->size + node-> >= db->MAX_CACHE_SIZE)
+	if (block_cache->size + 1 >= MAX_CACHE_SIZE)
 		return 1;
+	return 0;
+}
+
+int pop_block(struct DB *db)
+{
 	return 0;
 }
 
 struct BlockCache * create_cache(void)
 {
 	struct BlockCache *block_cache = (struct BlockCache *)malloc(sizeof(*block_cache));
-	block_cache->n = 0;
+	block_cache->n_pages = 0;
 	block_cache->lru = NULL;
 	block_cache->size = 0;
 
-	block_cache->all_pages = cfuhash_new_with_initial_size(0);
-	cfuhash_set_flag(block_cache->all_pages, CFUHASH_FROZEN_UNTIL_GROWS);
+	//block_cache->all_pages = cfuhash_new_with_initial_size(0);
+	//cfuhash_set_flag(block_cache->all_pages, CFUHASH_FROZEN_UNTIL_GROWS);
 
-	block->cache->find_block = &find_block;
+	block_cache->find_block = &find_block;
 	block_cache->push_block = &push_block;
 	block_cache->pop_block = &pop_block;
 	return block_cache;
