@@ -10,7 +10,7 @@
 #include "block_api.h"
 #include "third_party.h"
 
-int split(struct DB *db, int i)
+int split(struct DB *db, struct Node *node, int i)
 {
 	//printf("We splitting node %d\n", db->node->num_vertix);
 	struct Node *x = db->node;
@@ -67,7 +67,7 @@ int split(struct DB *db, int i)
 	return 0;
 }
 
-int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
+int insert_nonfull(struct DB *db, struct Node *node, struct DBT *key, struct DBT *value)
 {
 	int i = db->node->n-1;
 	//print_node(db->node);
@@ -172,12 +172,11 @@ int insert_nonfull(struct DB *db, struct DBT *key, struct DBT *value)
 	return 0;
 }
 
-int insert(struct DB *db, struct DBT *key, struct DBT *value)
+int insert(struct DB *db, struct Node *node, struct DBT *key, struct DBT *value)
 {
-	struct Node *r = db->node;
-	if (r->n == 2*db->t - 1) {
+	if (node->n == 2*db->t - 1) {
 		//printf("We are splitting node\n");
-		//printf("Vertix %d is full, we create new vertix\n", r->num_vertix);
+		//printf("Vertix %d is full, we create new vertix\n", node->num_vertix);
 		//fflush(stdout);
 		db->node = db->create_node(db);
 		struct Node *s = db->node;
@@ -186,62 +185,55 @@ int insert(struct DB *db, struct DBT *key, struct DBT *value)
 		s->children = (int *)calloc((s->n+2), sizeof(*s->children));
 		s->keys = (struct DBT *)malloc((s->n+1)*sizeof(*s->keys));
 		s->values = (struct DBT *)malloc((s->n+1)*sizeof(*s->values));
-		s->children[0] = r->num_vertix;
-		r->write_node(db, r);
-		r->close_node(db, r);
-		free(r);
-		split(db, 0);
+		s->children[0] = node->num_vertix;
+		node->write_node(db, node);
+		node->close_node(db, node);
+		free(node);
+		split(db, db->node, 0);
 		insert_nonfull(db, key, value);
 	}
 	else {
-		//printf("Vertix %d is not full\n", r->num_vertix);
+		//printf("Vertix %d is not full\n", node->num_vertix);
 		//fflush(stdout);
-		insert_nonfull(db, key, value);
+		insert_nonfull(db,  key, value);
 	}
 	return 0;
 }
 
-int sselect(struct DB *db, struct DBT *key, struct DBT *data)
+int sselect(struct DB *db, struct Node *node, struct DBT *key, struct DBT *data)
 {
-	if (db->node->n == 0)
+	if (node->n == 0)
 		return 0;
 	int i = 0;
-	int flg = 1;
-	struct Node *node = db->node;
-	int first = 0;
-	while(flg) {
-		while(i < node->n && new_memcmp(node->keys[i], *key) < 0) {
-			i++;
-		}
-		if (i < node->n &&  new_memcmp(node->keys[i], *key) == 0) {
-			data->size = node->values[i].size;
-			data->data = calloc(data->size, 1);
-			memcpy(data->data, node->values[i].data, data->size);
-			if (first) {
-				node->close_node(db, node);
-				free(node);
-			}
-			return i;
-		}
-		else if (node->leaf) {
-			if (first) {
-				node->close_node(db, node);
-				free(node);
-			}
-			data->data = NULL;
-			data->size = 0;
-			//printf("can not find elem %s\n", (char *)key->data);
-			return -1;
-		}
-		int child = node->children[i];
-		if (first) {
-			node->close_node(db, node);
-		}
-		node = db->open_node(db, child);
-		first = 1;
-		i = 0;
+
+	while(i < node->n && new_memcmp(node->keys[i], *key) < 0) {
+		i++;
 	}
-	return flg;
+	if (i < node->n &&  new_memcmp(node->keys[i], *key) == 0) {
+		data->size = node->values[i].size;
+		data->data = calloc(data->size, 1);
+		memcpy(data->data, node->values[i].data, data->size);
+		if (node != db->node) {
+			node->close_node(db, node);
+			free(node);
+		}
+		return i;
+	}
+	else if (node->leaf) {
+		if (node != db->node) {
+			node->close_node(db, node);
+			free(node);
+		}
+		data->data = NULL;
+		data->size = 0;
+		//printf("can not find elem %s\n", (char *)key->data);
+		return -1;
+	}
+	int child = node->children[i];
+	if (node != db->node) {
+		node->close_node(db, node);
+	}
+	return sselect(db, db->open_node(db, child), key, data);
 }
 
 int ddelete(struct DB *db, struct Node *node, struct DBT *key)

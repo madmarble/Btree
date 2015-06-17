@@ -2,8 +2,6 @@
 
 #include <stddef.h>
 
-//#include "cfuhash.h"
-
 struct DBT {
 	void  *data;
 	char size;
@@ -22,20 +20,19 @@ struct Node
 	int *children;
 	char write;
 
-	/*struct Node *lru_next;
+	struct Node *lru_next;
 	struct Node *lru_prev;
-	status stat;*/
+	//status stat;
 
 	int (*close_node)(struct DB *db, struct Node *node);
 	int (*write_node)(struct DB *db, struct Node *node);
-	int (*delete_node)(struct DB *db, struct Node *node);
 };
 
 struct BlockCache
 {
 	size_t n_pages;
 	struct Node *lru;
-	//cfuhash_table_t all_pages;
+	int *all_pages;
 	size_t size;
 
 	int (*find_block)(struct DB *db, struct Node *node);
@@ -48,13 +45,13 @@ struct DB {
 	/* Returns 0 on OK, -1 on Error */
 	int (*close)(struct DB *db);
 	int (*delete)(struct DB *db, struct Node *node, struct DBT *key);
-	int (*insert)(struct DB *db, struct DBT *key, struct DBT *data);
+	int (*insert)(struct DB *db, struct NOde *node, struct DBT *key, struct DBT *data);
 	/* * * * * * * * * * * * * *
 	 * Returns malloc'ed data into 'struct DBT *data'.
 	 * Caller must free data->data. 'struct DBT *data' must be alloced in
 	 * caller.
 	 * * * * * * * * * * * * * */
-	int (*select)(struct DB *db, struct DBT *key, struct DBT *data);
+	int (*select)(struct DB *db, struct Node *node, struct DBT *key, struct DBT *data);
 	/* Sync cached pages with disk
 	 * */
 	int (*sync)(struct DB *db);
@@ -132,8 +129,8 @@ int read_block(struct DB *db, struct Node *node);
 int write_block(struct DB *db, struct Node *node);
 int clear_block(struct DB *db, int num_vertix);
 
-int insert(struct DB *db, struct DBT *key, struct DBT *value);
-int sselect(struct DB *db, struct DBT *key, struct DBT *data);
+int insert(struct DB *db, struct Node *node, struct DBT *key, struct DBT *value);
+int sselect(struct DB *db, struct Node *node, struct DBT *key, struct DBT *data);
 int cclose(struct DB *db);
 int ddelete(struct DB *db, struct Node* node, struct DBT *key);
 

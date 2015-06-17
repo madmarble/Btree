@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+
 int MAX_CACHE_SIZE = 4;
 int init(struct bitmap *bitmap, int n)
 {
@@ -229,9 +230,7 @@ int find_block(struct DB *db, struct Node *node)
 	sprintf(str, "%d", node->num_vertix);
 	if (block_cache->size)
 		return 0;
-	/*if (cfuhash_exists(block_cache->all_pages, str)) {
-		return 1;
-	}*/
+	//return 1 if node in cache
 	return 0;
 }
 
@@ -255,8 +254,7 @@ struct BlockCache * create_cache(void)
 	block_cache->lru = NULL;
 	block_cache->size = 0;
 
-	//block_cache->all_pages = cfuhash_new_with_initial_size(0);
-	//cfuhash_set_flag(block_cache->all_pages, CFUHASH_FROZEN_UNTIL_GROWS);
+	block_cache->all_pages = (int *)calloc(block_cache->n_pages, sizeof(*block_cache->all_pages));
 
 	block_cache->find_block = &find_block;
 	block_cache->push_block = &push_block;

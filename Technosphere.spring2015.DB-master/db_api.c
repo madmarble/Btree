@@ -20,7 +20,7 @@ int db_select(struct DB *db, void *key, size_t key_len,
 		.size = key_len
 	};
 	struct DBT valt = {0, 0};
-	int rc = db->select(db, &keyt, &valt);
+	int rc = db->select(db, db->node, &keyt, &valt);
 	*val = valt.data;
 	*val_len = valt.size;
 	return rc;
@@ -36,5 +36,5 @@ int db_insert(struct DB *db, void *key, size_t key_len,
 		.data = val,
 		.size = val_len
 	};
-	return db->insert(db, &keyt, &valt);
+	return db->insert(db, db->node, &keyt, &valt);
 }
